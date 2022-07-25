@@ -35,7 +35,7 @@ function App() {
   useEffect(() => {
     _init();
     _getVoters();
-    // _getProposals();
+    _getProposals();
   }, []);
   function _init() {
     provider.current = new ethers.providers.JsonRpcProvider(HhLocal);
@@ -50,8 +50,6 @@ function App() {
     if (!ballot.current) return
 
     const a = await ballot?.current?.proposals(0)
-    console.log(a)
-    return  
     const pmis = proposals.map(async (p, i) => {
       return await (ballot?.current?.proposals(i) as Proposal)
     })
@@ -158,7 +156,7 @@ function App() {
               const w = i.toNumber();
               return (
                 <Popconfirm
-                  title="Are you sure to delete this task?"
+                  title="give right to vote?"
                   onConfirm={() => {
                     giveRightToVote(voter, index);
                   }}
@@ -188,7 +186,14 @@ function App() {
                         const tx = ballot.current
                           .connect(provider.current.getSigner(v.address))
                           .vote(selected);
-                        const te = await ballot.current.proposals(selected);
+                        
+                        // const te = await ballot.current.proposals(selected);
+                        getVoters([
+                          ...voters.slice(0, index),
+                          { ...v, voted: true },
+                          ...voters.slice(index + 1),
+                        ]);
+                        
                         _getProposals()
                       } catch (e) {
                         console.error(e);
@@ -209,7 +214,7 @@ function App() {
                   });
                 }}
               >
-                {i ? "true" : "false"}
+                {i ? "voted" : "vote"}
               </Button>
             ),
           },
@@ -231,9 +236,10 @@ function App() {
                           .delegate(address);
                         getVoters([
                           ...voters.slice(0, index),
-                          { ...v, delegate: address },
+                          { ...v, delegate: address, voted: true },
                           ...voters.slice(index + 1),
                         ]);
+                        _getProposals()
                       } catch (e) {
                         console.log("e", e);
                       }
@@ -259,10 +265,9 @@ function App() {
                     ),
                   });
                 }}
-                disabled={!isAddress0(i) || v.weight.toNumber() == 0}
+                disabled={!isAddress0(i) || v.weight.toNumber() === 0 || v.voted}
               >
-                {" "}
-                {isAddress0(i) ? "delegate" : getAddress(i)}{" "}
+                {isAddress0(i) ? "delegate" : getAddress(i)}
               </Button>
             ),
           },
