@@ -32,6 +32,7 @@ contract Ballot {
     }
 
     function giveRightToVote(address voter) external {
+        console.log("giveRightToVote address:", voter);
         require(msg.sender == chairperson,
          "only chairprson can give right to vote");
 
