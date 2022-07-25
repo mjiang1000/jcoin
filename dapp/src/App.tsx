@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from "react";
-import logo from "./logo.svg";
 import "./App.css";
 
 import { BigNumber, Contract, ethers } from "ethers";
@@ -8,9 +7,9 @@ import BallotAddr from "./contracts/contract-address.json";
 import { JsonRpcProvider } from "@ethersproject/providers";
 import { Button, Modal, Popconfirm, Select, Table } from "antd";
 import { getAddress } from "@ethersproject/address";
-const {Option} = Select;
+const { Option } = Select;
 const HhLocal = "http://127.0.0.1:8545/";
-const proposals = ["apple", "orange", "banana"]
+const proposals = ["apple", "orange", "banana"];
 interface Voter {
   weight: BigNumber;
   vote: BigNumber;
@@ -31,10 +30,12 @@ function App() {
   const ballot = useRef<Contract>();
   const provider = useRef<JsonRpcProvider>();
   const [voters, getVoters] = useState<Voter[]>([]);
+  const [ps, getProposals] = useState<Proposal[]>([]);
 
   useEffect(() => {
     _init();
     _getVoters();
+    // _getProposals();
   }, []);
   function _init() {
     provider.current = new ethers.providers.JsonRpcProvider(HhLocal);
@@ -43,6 +44,26 @@ function App() {
       BallotABI.abi,
       provider.current.getSigner(0)
     );
+  }
+  async function _getProposals() {
+    
+    if (!ballot.current) return
+
+    const a = await ballot?.current?.proposals(0)
+    console.log(a)
+    return  
+    const pmis = proposals.map(async (p, i) => {
+      return await (ballot?.current?.proposals(i) as Proposal)
+    })
+    const list = await Promise.all(pmis)
+    getProposals(proposals.map((_, index) => {
+      return {
+        name: proposals[index],
+        voteCount: list[index].voteCount
+      }
+    }))
+       
+    
   }
   async function _getVoter(i: string): Promise<Voter> {
     const v: Voter = await ballot?.current?.voters(i);
@@ -111,13 +132,24 @@ function App() {
           solidity-by-example
         </a>
       </header>
+      <p style={{ textAlign: "left" }}>
+        proposals:
+      </p>
+      {
+        ps.map(i => {
+          return <div className="flex">
+          {`proposal ${i.name} has ${i.voteCount} of votes`}
+        </div>
+        })
+      }
+     
       <p style={{ textAlign: "left" }}>list of voters:</p>
 
       <Table
         pagination={false}
         dataSource={voters}
         columns={[
-          {title: "num", render: (_, __, index) => index},
+          { title: "num", render: (_, __, index) => index },
           { title: "address", dataIndex: "address" },
           {
             title: "weight",
@@ -142,49 +174,98 @@ function App() {
           {
             title: "voted",
             dataIndex: "voted",
-            render: (i) => {
-              return i ? "true" : "false";
-            },
+            render: (i, v, index) => (
+              <Button
+                disabled={i || v.weight.toNumber() == 0}
+                onClick={() => {
+                  let selected = -1;
+                  Modal.info({
+                    title: "vote to proposal",
+                    onOk: async () => {
+                      if (selected === -1) return;
+                      if (!ballot.current || !provider.current) return;
+                      try {
+                        const tx = ballot.current
+                          .connect(provider.current.getSigner(v.address))
+                          .vote(selected);
+                        const te = await ballot.current.proposals(selected);
+                        _getProposals()
+                      } catch (e) {
+                        console.error(e);
+                      }
+                    },
+                    content: (
+                      <Select
+                        onChange={(i: number) => {
+                          selected = i;
+                        }}
+                        placeholder="Select a proposal"
+                      >
+                        {proposals.map((p, inx) => {
+                          return <Option value={inx}>{p}</Option>;
+                        })}
+                      </Select>
+                    ),
+                  });
+                }}
+              >
+                {i ? "true" : "false"}
+              </Button>
+            ),
           },
           {
             title: "delegate",
             dataIndex: "delegate",
-            render: (i, v, index) => <Button onClick={() => {
-              let address = ''
-              Modal.info({
-                title: 'delegate to address',
-                onOk: async () => {
-                  if (!address) return
-                  if (!ballot.current || !provider.current) return
-                  try {
-                    const tx = ballot.current.connect(provider.current?.getSigner(v.address)).delegate(address )
-                    getVoters([
-                      ...voters.slice(0, index),
-                      { ...v, delegate: address },
-                      ...voters.slice(index + 1),
-                    ]);
-                  } catch(e) {
-                    console.log('e', e)
-                  }
-                 
-                 
-                },
-                content:  <Select
-                placeholder="Select a address index"
-                onChange={(v) => {
-                  address = v
+            render: (i, v, index) => (
+              <Button
+                onClick={() => {
+                  let address = "";
+                  Modal.info({
+                    title: "delegate to address",
+                    onOk: async () => {
+                      if (!address) return;
+                      if (!ballot.current || !provider.current) return;
+                      try {
+                        const tx = ballot.current
+                          .connect(provider.current?.getSigner(v.address))
+                          .delegate(address);
+                        getVoters([
+                          ...voters.slice(0, index),
+                          { ...v, delegate: address },
+                          ...voters.slice(index + 1),
+                        ]);
+                      } catch (e) {
+                        console.log("e", e);
+                      }
+                    },
+                    content: (
+                      <Select
+                        placeholder="Select a address index"
+                        onChange={(v) => {
+                          address = v;
+                        }}
+                      >
+                        {voters.map((v1, inx) => (
+                          <Option
+                            disabled={
+                              inx === index || v1.weight.toNumber() === 0
+                            }
+                            value={v1.address}
+                          >{`${inx}: ${v1.address.slice(
+                            v1.address.length - 5
+                          )}`}</Option>
+                        ))}
+                      </Select>
+                    ),
+                  });
                 }}
-              
+                disabled={!isAddress0(i) || v.weight.toNumber() == 0}
               >
-                {
-                  voters.map((v1, inx) => <Option disabled={inx === index || v1.weight.toNumber() === 0} value={v1.address}>{`${inx}: ${v1.address.slice(v1.address.length -5)}`}</Option>)
-                }
-                
-              </Select>
-              })
-            }} disabled={!isAddress0(i) || v.weight.toNumber() == 0}> {(isAddress0(i) ? "delegate" : getAddress(i))} </Button>,
+                {" "}
+                {isAddress0(i) ? "delegate" : getAddress(i)}{" "}
+              </Button>
+            ),
           },
-         
         ]}
       ></Table>
     </div>
