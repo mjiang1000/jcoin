@@ -33,23 +33,27 @@ function App() {
   const [ps, getProposals] = useState<Proposal[]>([]);
 
   useEffect(() => {
-    _init();
-    _getVoters();
-    _getProposals();
+    _init().then(() => {
+     _getVoters();
+     _getProposals();
+    })
+  
   }, []);
   function _init() {
-    provider.current = new ethers.providers.JsonRpcProvider(HhLocal);
-    ballot.current = new ethers.Contract(
-      BallotAddr.Token,
+    const a = new ethers.providers.JsonRpcProvider(HhLocal);
+    provider.current = a
+    const factory = new ethers.ContractFactory(
       BallotABI.abi,
-      provider.current.getSigner(0)
+      BallotABI.bytecode,
+      a.getSigner(BallotAddr.Token)
     );
+    return factory.deploy(proposals.map(n => ethers.utils.formatBytes32String(n))).then(c=>
+      ballot.current = c
+    );
+    
   }
   async function _getProposals() {
-    
     if (!ballot.current) return
-
-    const a = await ballot?.current?.proposals(0)
     const pmis = proposals.map(async (p, i) => {
       return await (ballot?.current?.proposals(i) as Proposal)
     })
@@ -183,11 +187,11 @@ function App() {
                       if (selected === -1) return;
                       if (!ballot.current || !provider.current) return;
                       try {
-                        const tx = ballot.current
+                        const tx = await ballot.current
                           .connect(provider.current.getSigner(v.address))
                           .vote(selected);
                         
-                        // const te = await ballot.current.proposals(selected);
+                        const te = await ballot.current.proposals(selected);
                         getVoters([
                           ...voters.slice(0, index),
                           { ...v, voted: true },
